@@ -1,0 +1,90 @@
+services:
+  openhab:
+    image: openhab/openhab:latest
+    container_name: openhab
+    restart: always
+    network_mode: host
+    volumes:
+      - "/home/skadmin/Smarthome/openhab/conf:/openhab/conf"
+      - "/home/skadmin/Smarthome/openhab/userdata:/openhab/userdata"
+      - "/home/skadmin/Smarthome/openhab/addons:/openhab/addons"
+    environment:
+      TZ: "Europe/Berlin"
+      USER_ID: 999
+      GROUP_ID: 984
+      # Adjust accordingly
+      CRYPTO_POLICY: "unlimited"
+      OPENHAB_HTTP_PORT: 8080
+      OPENHAB_HTTPS_PORT: 8443
+      JAVA_MIN_MEM: 4g
+      JAVA_MAX_MEM: 4g
+    # added
+    # environment:
+      # - REST_API_ENABLE=1
+      # - WEB_GUI_ENABLE=1
+
+  openthread-border-router:
+    #https://github.com/orgs/openthread/discussions/12275
+    container_name: openthread-border-router
+    image: openthread/border-router
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    # env_file: ./openthread_border_router/otbr-env.list
+    environment:
+      OT_RCP_DEVICE: "spinel+hdlc+uart:///dev/ttyUSB_THREAD?uart-baudrate=115200"
+      OT_INFRA_IF: "eth0"
+      OT_THREAD_IF: "wpan0"
+      OT_LOG_LEVEL: 7
+      OT_WEB_LISTEN_ADDR: "0.0.0.0"
+      # this must be different to port 8080 which is used for openhab
+      OT_WEB_LISTEN_PORT: 8084
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB_THREAD
+      # This is not working but would be better since it addresse the physical USB connector 
+      #- "/dev/bus/usb/003/002:/dev/ttyUSB_THREAD"
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - "/home/skadmin/Smarthome/openthread_border_router:/data"
+  samba:
+    # manual: https://github.com/ServerContainers/samba
+    # sample config here: https://github.com/ServerContainers/samba/blob/master/docker-compose.yml
+    # access in windows via \\RASPI-SH\smarthome in file explorer
+    # access in windows via \\<ip>\smarthome in file explorer
+    image: ghcr.io/servercontainers/samba:latest
+    restart: always
+    network_mode: host
+    cap_add:
+      - CAP_NET_ADMIN
+    environment:
+      MODEL: 'TimeCapsule'
+      AVAHI_NAME: "samba_smarthome"
+
+      SAMBA_CONF_LOG_LEVEL: 3
+
+      GROUP_smarthomegroup: 444
+
+      ACCOUNT_smarthome: ${SAMBA_EXT_PW}
+      UID_smarthome: 1000
+      GROUPS_smarthome: smarthomegroup
+
+      SAMBA_VOLUME_CONFIG_smarthome: "[${SAMBA_EXT_NAME}]; path=/shares/Smarthome;: valid users = ${SAMBA_EXT_USER}; guest ok = no; browseable = yes; read only = no"
+    volumes:
+      - /etc/avahi/services/:/external/avahi
+      - /home/skadmin/Smarthome:/shares/Smarthome
+  mosquitto:
+    container_name: mosquitto
+    #profiles:
+    #  - donotstart
+    restart: always
+    image: eclipse-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - /home/skadmin/Smarthome/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - /home/skadmin/Smarthome/mosquitto/data:/mosquitto/data
+      - /home/skadmin/Smarthome/mosquitto/log:/mosquitto/log
+    networks:
+      - default
